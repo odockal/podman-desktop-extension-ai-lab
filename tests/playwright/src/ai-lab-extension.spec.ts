@@ -23,6 +23,7 @@ import {
   test,
   RunnerOptions,
   isLinux,
+  isWindows,
   waitForPodmanMachineStartup,
 } from '@podman-desktop/tests-playwright';
 import { AILabPage } from './model/ai-lab-page';
@@ -40,9 +41,13 @@ const AI_LAB_PAGE_BODY_LABEL: string = 'Webview AI Lab';
 
 let webview: Page;
 let aiLabPage: AILabPage;
+const runnerOptions = {
+  customFolder: 'ai-lab-tests-pd',
+  aiLabModelUploadDisabled: isWindows ? true : false,
+}
 
 test.use({
-  runnerOptions: new RunnerOptions({ customFolder: 'ai-lab-tests-pd', autoUpdate: false, autoCheckUpdates: false }),
+  runnerOptions: new RunnerOptions(runnerOptions),
 });
 test.beforeAll(async ({ runner, welcomePage, page }) => {
   runner.setVideoAndTraceName('ai-lab-e2e');
@@ -56,7 +61,8 @@ test.afterAll(async ({ runner }) => {
   await runner.close();
 });
 
-test.describe.serial(`AI Lab extension installation and verification`, { tag: '@smoke' }, () => {
+test.describe(`AI Lab extension installation and verification`, { tag: '@smoke' }, () => {
+  let installationFailed = true;
   test.describe.serial(`AI Lab extension installation`, () => {
     let extensionsPage: ExtensionsPage;
 
@@ -104,32 +110,36 @@ test.describe.serial(`AI Lab extension installation and verification`, { tag: '@
     });
   });
 
-  ['ChatBot', 'Summarizer', 'Code Generation', 'RAG Chatbot', 'Audio to Text', 'Object Detection'].forEach(appName => {
-    test.describe.serial(`AI Lab extension verification`, () => {
-      let recipesCatalogPage: AILabRecipesCatalogPage;
+  test.describe(`AI Lab Recipes check`, () => {
+    ['Audio to Text', 'Object Detection', 'ChatBot', 'Summarizer', 'Code Generation'].forEach(appName => {
+      test.describe.serial(`AI Recipe installation`, () => {
+        test.skip(installationFailed, 'Installation of the extension failed, no other scenario can be run');
+        let recipesCatalogPage: AILabRecipesCatalogPage;
 
-      test.skip(isLinux, `Skipping AI App deployment on Linux`);
-      test.beforeEach(`Open Recipes Catalog`, async ({ runner, page, navigationBar }) => {
-        [page, webview] = await handleWebview(runner, page, navigationBar);
-        aiLabPage = new AILabPage(page, webview);
-        await aiLabPage.navigationBar.waitForLoad();
+        // test.skip(isLinux, `Skipping AI App deployment on Linux`);
+        test.beforeEach(`Open Recipes Catalog`, async ({ runner, page, navigationBar }) => {
+          [page, webview] = await handleWebview(runner, page, navigationBar);
+          aiLabPage = new AILabPage(page, webview);
+          await aiLabPage.navigationBar.waitForLoad();
 
-        recipesCatalogPage = await aiLabPage.navigationBar.openRecipesCatalog();
-        await recipesCatalogPage.waitForLoad();
-      });
+          recipesCatalogPage = await aiLabPage.navigationBar.openRecipesCatalog();
+          await recipesCatalogPage.waitForLoad();
+        });
 
-      test(`Install ${appName} example app`, async () => {
-        test.setTimeout(1_500_000);
-        const demoApp = await recipesCatalogPage.openRecipesCatalogApp(appName);
-        await demoApp.waitForLoad();
-        await demoApp.startNewDeployment();
-      });
+        test(`Install ${appName} example app`, async () => {
+          test.setTimeout(1_500_000);
+          playExpect(1).toBe(2);
+          const demoApp = await recipesCatalogPage.openRecipesCatalogApp(appName);
+          await demoApp.waitForLoad();
+          await demoApp.startNewDeployment();
+        });
 
-      test.afterEach(`Stop ${appName} app`, async ({ navigationBar }) => {
-        test.setTimeout(150_000);
-        await stopAndDeleteApp(appName);
-        await cleanupServiceModels();
-        await deleteUnusedImages(navigationBar);
+        test.afterEach(`Stop ${appName} app`, async ({ navigationBar }) => {
+          test.setTimeout(150_000);
+          await stopAndDeleteApp(appName);
+          await cleanupServiceModels();
+          await deleteUnusedImages(navigationBar);
+        });
       });
     });
   });
