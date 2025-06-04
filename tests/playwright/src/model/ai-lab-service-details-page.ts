@@ -52,7 +52,9 @@ export class AILabServiceDetailsPage extends AILabBasePage {
   }
 
   async getInferenceServerPort(): Promise<string> {
-    const split = (await this.endpointURL.textContent())?.split(':');
+    await playExpect(this.endpointURL).toBeVisible();
+    const endpointText = await this.endpointURL.innerText();
+    const split = (endpointText)?.split(':');
     const port = split ? split[split.length - 1].split('/')[0] : '';
     return port;
   }
